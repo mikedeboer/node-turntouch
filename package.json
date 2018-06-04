@@ -1,0 +1,31 @@
+{
+  "name": "turntouch",
+  "version": "0.1.0",
+  "description": "NodeJS wrapper for the TurnTouch Remote",
+  "author": "Mike de Boer <info@mikedeboer.nl>",
+  "contributors": [
+    {
+      "name": "Mike de Boer",
+      "email": "info@mikedeboer.nl"
+    }
+  ],
+  "homepage": "https://github.com/mikedeboer/node-turntouch",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mikedeboer/node-turntouch.git"
+  },
+  "engine": {
+    "node": ">=8.10.0"
+  },
+  "dependencies": {
+    "noble": "^1.9.1"
+  },
+  "main": "./index.js",
+  "license": "MIT",
+  "licenses": [
+    {
+      "type": "The MIT License",
+      "url": "http://www.opensource.org/licenses/mit-license.php"
+    }
+  ]
+}
