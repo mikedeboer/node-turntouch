@@ -12,16 +12,16 @@ const UUIDS = {
 const BUTTONS = {
   "ff00": "off",
   "fe00": "north",
-  "ef00": "north double tap",
+  "ef00": "north double-tap",
   "feff": "north hold",
   "fd00": "east",
-  "df00": "east double tap",
+  "df00": "east double-tap",
   "fdff": "east hold",
   "fb00": "west",
-  "bf00": "west double tap",
+  "bf00": "west double-tap",
   "fbff": "west hold",
   "f700": "south",
-  "7f00": "south double tap",
+  "7f00": "south double-tap",
   "f7ff": "south hold",
   "fc00": "multi-touch north + east",
   "fa00": "multi-touch north + west",
@@ -36,15 +36,17 @@ const BUTTONS = {
   "f000": "multi-touch north + east + west + south"
 };
 
+var BUTTON_EVENTDATA;
+
 const DOUBLETAP_DEBOUNCE_TIMEOUT_MS = 250;
 const BATTERY_POLL_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes.
 
-var TurnTouch = module.exports = function(poweredNoble) {
-  this.noble = poweredNoble;
-  this.setup();
-};
+module.exports = class TurnTouch {
+  constructor(poweredNoble) {
+    this.noble = poweredNoble;
+    this.setup();
+  }
 
-TurnTouch.prototype = {
   async setup() {
     if (this.noble.state != "poweredOn") {
       await new Promise(resolve => {
@@ -69,7 +71,7 @@ TurnTouch.prototype = {
     } catch (ex) {
       this.emit("error", ex);
     }
-  },
+  }
 
   async discoverAndConnect() {
     this.noble.startScanning([], true, err => {
@@ -97,7 +99,7 @@ TurnTouch.prototype = {
         });
       });
     });
-  },
+  }
 
   async setupButtonListener() {
     if (!this.peripheral) {
@@ -128,14 +130,14 @@ TurnTouch.prototype = {
       });
     });
     this.buttonData.on("data", this.onButtonData.bind(this));
-  },
+  }
 
   onButtonData(data) {
     let button = BUTTONS[data.toString("hex")];
     if (button == "off") {
       if (this._currentButtonBetweenOffs) {
         if (this._doubleTapDebounceTimer) {
-          // Bail out, we're waiting for a double tap.
+          // Bail out, we're waiting for a double-tap.
           return;
         }
         this._doubleTapDebounceTimer = setTimeout(this.resetButtonTracker.bind(this),
@@ -143,20 +145,39 @@ TurnTouch.prototype = {
       }/* else {} // 'off' received with no prior button press; ignore. */
     } else {
       this._currentButtonBetweenOffs = button;
-      if (button.endsWith("double tap") || button.endsWith("hold")) {
+      if (button.endsWith("double-tap") || button.endsWith("hold")) {
         this.resetButtonTracker();
       }
     }
-  },
+  }
+
+  createEvent(buttonString) {
+    if (!BUTTON_EVENTDATA) {
+      BUTTON_EVENTDATA = {};
+      for (let btn of Object.values(BUTTONS)) {
+        let [button, ...modifiers] = btn.split(/[\s+]+/);
+        BUTTON_EVENTDATA[btn] = {
+          button,
+          hold: modifiers.includes("hold"),
+          doubleTap: modifiers.includes("double-tap"),
+          buttons: []
+        };
+        if (button == "multi-touch") {
+          BUTTON_EVENTDATA[btn].buttons.push(...modifiers);
+        }
+      }
+    }
+    return Object.assign({}, BUTTON_EVENTDATA[buttonString]);
+  }
 
   resetButtonTracker() {
     clearTimeout(this._doubleTapDebounceTimer);
     this._doubleTapDebounceTimer = null;
     if (this._currentButtonBetweenOffs) {
-      this.emit("button", this._currentButtonBetweenOffs);
+      this.emit("button", this.createEvent(this._currentButtonBetweenOffs));
     }
     this._currentButtonBetweenOffs = null;
-  },
+  }
 
   async setupBatteryGauge() {
     if (!this.peripheral) {
@@ -179,7 +200,7 @@ TurnTouch.prototype = {
     this.batteryGaugePoll();
 
     this.emit("battery", await this.getBatteryLevel());
-  },
+  }
 
   batteryGaugePoll() {
     if (this._batteryTimer) {
@@ -190,7 +211,7 @@ TurnTouch.prototype = {
       this.emit("battery", await this.getBatteryLevel());
       this.batteryGaugePoll();
     }, BATTERY_POLL_TIMEOUT_MS);
-  },
+  }
 
   async getBatteryLevel() {
     return new Promise((resolve, reject) => {
@@ -203,7 +224,7 @@ TurnTouch.prototype = {
         resolve(data.readIntBE(0, data.length));
       })
     });
-  },
+  }
 
   disconnect() {
     if (this._batteryTimer) {
@@ -221,4 +242,4 @@ TurnTouch.prototype = {
   }
 };
 
-Util.inherits(TurnTouch, Events.EventEmitter);
+Util.inherits(module.exports, Events.EventEmitter);
