@@ -6,6 +6,7 @@ var TurnTouch = require("./index");
 var gTurnTouch;
 
 Noble.on("stateChange", function(state) {
+  console.log("Noble state change.", state);
   if (state == "poweredOn") {
     gTurnTouch = new TurnTouch(Noble);
     gTurnTouch.on("button", button => {

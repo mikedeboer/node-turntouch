@@ -41,6 +41,14 @@ var BUTTON_EVENTDATA;
 const DOUBLETAP_DEBOUNCE_TIMEOUT_MS = 250;
 const BATTERY_POLL_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes.
 
+const DEBUG = false;
+const LOG = (...args) => {
+  if (!DEBUG) {
+    return;
+  }
+  console.log("DEBUG TurnTouch:: ", ...args);
+};
+
 module.exports = class TurnTouch {
   constructor(poweredNoble) {
     this.noble = poweredNoble;
@@ -74,28 +82,31 @@ module.exports = class TurnTouch {
   }
 
   async discoverAndConnect() {
-    this.noble.startScanning([], true, err => {
-      if (err) {
-        throw new Error("Couldn't start scanning: " + err);
-      }
-    });
-
     return new Promise((resolve, reject) => {
-      this.noble.on("discover", peripheral => {
-        if (!peripheral.advertisement || !peripheral.advertisement.localName ||
-            !peripheral.advertisement.localName.startsWith("Turn Touch")) {
-          return;
+      this.noble.startScanning([], true, err => {
+        if (err) {
+          throw new Error("Couldn't start scanning: " + err);
         }
 
-        this.noble.stopScanning();
-        peripheral.connect(err => {
-          if (err) {
-            reject(new Error("Couldn't connect to remote: " + err));
+        LOG("Scanning started.");
+        this.noble.on("discover", peripheral => {
+          LOG("Peripheral DISCOVERED.", peripheral);
+          if (!peripheral.advertisement || !peripheral.advertisement.localName ||
+              !peripheral.advertisement.localName.startsWith("Turn Touch")) {
             return;
           }
 
-          this.peripheral = peripheral;
-          resolve();
+          this.noble.stopScanning();
+          peripheral.connect(err => {
+            if (err) {
+              reject(new Error("Couldn't connect to remote: " + err));
+              return;
+            }
+
+            this.peripheral = peripheral;
+            peripheral.once("disconnect", this.onDisconnect.bind(this));
+            resolve();
+          });
         });
       });
     });
@@ -174,7 +185,9 @@ module.exports = class TurnTouch {
     clearTimeout(this._doubleTapDebounceTimer);
     this._doubleTapDebounceTimer = null;
     if (this._currentButtonBetweenOffs) {
-      this.emit("button", this.createEvent(this._currentButtonBetweenOffs));
+      let event = this.createEvent(this._currentButtonBetweenOffs);
+      LOG("Button pressed.", event);
+      this.emit("button", event);
     }
     this._currentButtonBetweenOffs = null;
   }
@@ -221,7 +234,9 @@ module.exports = class TurnTouch {
           return;
         }
 
-        resolve(data.readIntBE(0, data.length));
+        let level = data.readIntBE(0, data.length);
+        LOG("Battery.", level);
+        resolve(level);
       })
     });
   }
@@ -229,15 +244,28 @@ module.exports = class TurnTouch {
   disconnect() {
     if (this._batteryTimer) {
       clearTimeout(this._batteryTimer);
+      this._batteryTimer = null;
     }
     if (this.buttonData) {
       this.resetButtonTracker();
       // No callback to watch for errors here, because disconnect() should be
       // synchronous.
       this.buttonData.unsubscribe();
+      this.buttonData = null;
     }
     if (this.peripheral) {
       this.peripheral.disconnect();
+    }
+    this.peripheral = null;
+  }
+
+  onDisconnect() {
+    let restart = !!this.peripheral;
+    this.peripheral = null;
+    this.disconnect();
+    if (restart) {
+      LOG("Reconnecting.");
+      this.setup();
     }
   }
 };
