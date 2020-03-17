@@ -1,6 +1,6 @@
 {
   "name": "turntouch",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "NodeJS wrapper for the TurnTouch Remote",
   "author": "Mike de Boer <info@mikedeboer.nl>",
   "contributors": [
