@@ -39,6 +39,7 @@ const BUTTONS = {
 var BUTTON_EVENTDATA;
 
 const DOUBLETAP_DEBOUNCE_TIMEOUT_MS = 250;
+const HOLD_REPEAT_TIMEOUT_MS = 10;
 const BATTERY_POLL_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes.
 
 const DEBUG = false;
@@ -53,6 +54,7 @@ module.exports = class TurnTouch {
   constructor(poweredNoble) {
     this.noble = poweredNoble;
     this.setup();
+    this._events = new Map();
   }
 
   async setup() {
@@ -89,13 +91,15 @@ module.exports = class TurnTouch {
         }
 
         LOG("Scanning started.");
-        this.noble.on("discover", peripheral => {
-          LOG("Peripheral DISCOVERED.", peripheral);
+        let handler;
+        this.noble.on("discover", handler = peripheral => {
           if (!peripheral.advertisement || !peripheral.advertisement.localName ||
               !peripheral.advertisement.localName.startsWith("Turn Touch")) {
             return;
           }
 
+          LOG("Peripheral DISCOVERED.", peripheral);
+          this.noble.off("discover", handler);
           this.noble.stopScanning();
           peripheral.connect(err => {
             if (err) {
@@ -104,7 +108,8 @@ module.exports = class TurnTouch {
             }
 
             this.peripheral = peripheral;
-            peripheral.once("disconnect", this.onDisconnect.bind(this));
+            this._events.set("disconnect", this.onDisconnect.bind(this));
+            peripheral.on("disconnect", this._events.get("disconnect"));
             resolve();
           });
         });
@@ -140,13 +145,20 @@ module.exports = class TurnTouch {
         resolve();
       });
     });
-    this.buttonData.on("data", this.onButtonData.bind(this));
+    this._events.set("data", this.onButtonData.bind(this))
+    this.buttonData.on("data", this._events.get("data"));
   }
 
   onButtonData(data) {
     let button = BUTTONS[data.toString("hex")];
     if (button == "off") {
       if (this._currentButtonBetweenOffs) {
+        LOG("Button OFF.", this._holdRepeatTimer);
+        if (this._holdRepeatTimer) {
+          clearInterval(this._holdRepeatTimer);
+          this._holdRepeatTimer = null;
+          return;
+        }
         if (this._doubleTapDebounceTimer) {
           // Bail out, we're waiting for a double-tap.
           return;
@@ -188,6 +200,12 @@ module.exports = class TurnTouch {
       let event = this.createEvent(this._currentButtonBetweenOffs);
       LOG("Button pressed.", event);
       this.emit("button", event);
+      if (event.hold && !this._holdRepeatTimer) {
+        this._holdRepeatTimer = setInterval(() => {
+          LOG("Holding button depressed.", event);
+          this.emit("button", event);
+        }, HOLD_REPEAT_TIMEOUT_MS);
+      }
     }
     this._currentButtonBetweenOffs = null;
   }
@@ -250,13 +268,16 @@ module.exports = class TurnTouch {
       this.resetButtonTracker();
       // No callback to watch for errors here, because disconnect() should be
       // synchronous.
+      this.buttonData.off("data", this._events.get("data"));
       this.buttonData.unsubscribe();
       this.buttonData = null;
     }
+    this.peripheral.off("disconnect", this._events.get("disconnect"));
     if (this.peripheral) {
       this.peripheral.disconnect();
     }
     this.peripheral = null;
+    this._events.clear();
   }
 
   onDisconnect() {
