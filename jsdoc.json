@@ -1,0 +1,26 @@
+{
+  "source": {
+    "include": ["./index.js"]
+  },
+  "plugins": [
+    "plugins/markdown",
+    "node_modules/better-docs/category"
+  ],
+  "opts": {
+    "encoding": "utf8",
+    "destination": "docs/",
+    "readme": "README.md",
+    "recurse": true,
+    "verbose": true,
+    "template": "./node_modules/better-docs"
+  },
+  "better-docs": {
+    "name": "TurnTouch Documentation",
+    "navigation": [
+      {
+        "label": "Github",
+        "href": "https://github.com/mikedeboer/node-turntouch"
+      }
+    ]
+  }
+}

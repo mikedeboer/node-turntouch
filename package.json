@@ -27,5 +27,11 @@
       "type": "The MIT License",
       "url": "http://www.opensource.org/licenses/mit-license.php"
     }
-  ]
+  ],
+  "devDependencies": {
+    "better-docs": "^1.4.7"
+  },
+  "scripts": {
+    "docs": "jsdoc -c jsdoc.json"
+  }
 }
